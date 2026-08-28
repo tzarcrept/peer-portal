@@ -284,6 +284,3 @@ portal/
 
 ---
 
-## License
-
-[MIT](LICENSE) — use, fork, and adapt freely.
