@@ -1,0 +1,199 @@
+{% extends "portal/base.html" %}
+{% load portal_extras %}
+
+{% block title %}{{ selected_proj|default:"Project analytics" }} — PEER{% endblock %}
+
+{% block content %}
+<h2>Project analytics</h2>
+<p class="page-note">Target vs current progress · as at {{ analysis.today }}</p>
+
+{% if not project_names %}
+    <div class="empty-state">
+        <p>No projects yet.</p>
+        <p>Load the demonstration dataset with <code>python manage.py seed_synthetic_data</code>.</p>
+    </div>
+{% else %}
+
+<form method="get" class="selector-bar" id="project-select-form">
+    <div class="field">
+        <label for="project-select">Project</label>
+        <select name="project" id="project-select"
+                onchange="document.getElementById('project-select-form').submit()">
+            {% for name in project_names %}
+                <option value="{{ name }}" {% if name == selected_proj %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <a class="btn" href="{% url 'repository' %}?project={{ selected_proj|urlencode }}">Open full sheet</a>
+    <a class="btn" href="{% url 'edit_project' selected_proj %}">Edit</a>
+</form>
+
+{% if analysis %}
+<div class="kpi-strip">
+    <div class="kpi is-planned">
+        <div class="kpi-label">Target progress</div>
+        <div class="kpi-value val-planned">{{ curves.planned_today }}%</div>
+        <div class="kpi-sub">where the baseline says it should be</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Current progress</div>
+        <div class="kpi-value">{{ curves.actual_today }}%</div>
+        <div class="kpi-sub">weighted by activity duration</div>
+    </div>
+    <div class="kpi is-{{ analysis.health.level }}">
+        <div class="kpi-label">Schedule variance</div>
+        <div class="kpi-value val-{{ analysis.health.level }}">{{ curves.variance|signed }}</div>
+        <div class="kpi-sub"><span class="badge {{ analysis.health.level }}">{{ analysis.health.label }}</span></div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">SPI</div>
+        <div class="kpi-value">{{ curves.spi|default:"—" }}</div>
+        <div class="kpi-sub">1.00 is exactly on plan</div>
+    </div>
+    {% if analysis.forecast %}
+    <div class="kpi {% if analysis.forecast.is_late %}is-critical{% else %}is-good{% endif %}">
+        <div class="kpi-label">Forecast finish</div>
+        <div class="kpi-value" style="font-size:1.05rem;">{{ analysis.forecast.forecast_completion }}</div>
+        <div class="kpi-sub">
+            {% if analysis.forecast.is_late %}
+                <span class="val-critical">{{ analysis.forecast.slip_days }} days late</span>
+            {% else %}on or ahead of plan{% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% if analysis.cost.has_data %}
+    <div class="kpi {% if analysis.cost.flag %}is-warning{% endif %}">
+        <div class="kpi-label">Budget spent</div>
+        <div class="kpi-value {% if analysis.cost.flag %}val-warning{% endif %}">{{ analysis.cost.burn_pct }}%</div>
+        <div class="kpi-sub">
+            {% if analysis.cost.flag %}{{ analysis.cost.overrun_points|signed }} pts vs progress{% else %}tracking progress{% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% include "portal/_insight.html" with insight=insight heading="Project insights" %}
+<div class="action-row">
+    <button class="btn" id="refresh-insight" data-target="{{ selected_proj }}">Regenerate insights</button>
+    {% if not ai_configured %}
+        <span class="caption">Set <code>PEER_AI_API_KEY</code> to switch from rule-based to AI narrative.</span>
+    {% endif %}
+</div>
+
+<div class="section-label">Progress curves</div>
+<div class="panel">
+    <div class="panel-head">
+        <h3>Target vs current S-curve</h3>
+        <span class="caption">Shaded area is the shortfall against baseline</span>
+    </div>
+    {% if curves.has_data %}
+        <div class="chart-wrap" data-chart="s-curve" data-source="curve-data"></div>
+        {{ curves|json_script:"curve-data" }}
+        <div class="legend">
+            <span><i class="swatch planned"></i> Target (planned)</span>
+            <span><i class="swatch actual"></i> Current (actual)</span>
+            <span><i class="swatch gap"></i> Shortfall</span>
+            <span><i class="swatch today"></i> Today</span>
+        </div>
+    {% else %}
+        <p class="caption">This project has no activities with usable planned dates, so no curve can be drawn.</p>
+    {% endif %}
+</div>
+
+<div class="section-label">Activities needing attention</div>
+<div class="panel">
+    <div class="panel-head">
+        <h3>Ranked by priority score</h3>
+        <span class="caption">Lateness (capped at 90 days), criticality, and shortfall against own baseline</span>
+    </div>
+    {% if analysis.critical_activities %}
+    <div class="table-scroll">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th class="num">Score</th>
+                <th>Activity</th>
+                <th>Status</th>
+                <th class="num">Crit.</th>
+                <th>Planned finish</th>
+                <th class="num">Overdue</th>
+                <th class="num">Done</th>
+                <th>Why it is flagged</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for act in analysis.critical_activities %}
+            <tr>
+                <td class="num"><strong>{{ act.score }}</strong></td>
+                <td class="name-cell">{{ act.name }}</td>
+                <td>
+                    <span class="badge {% if act.status == 'Delayed' %}critical{% elif act.status == 'In Progress' %}neutral{% else %}unknown{% endif %}">{{ act.status }}</span>
+                </td>
+                <td class="num">{{ act.criticality }}/5</td>
+                <td class="num">{{ act.planned_finish|default:"—" }}</td>
+                <td class="num">{% if act.overdue_days %}<span class="val-critical">{{ act.overdue_days }}d</span>{% else %}—{% endif %}</td>
+                <td class="num">{{ act.progress_pct }}%</td>
+                <td>
+                    <div class="reasons">
+                        {% for reason in act.reasons %}<span class="chip">{{ reason }}</span>{% endfor %}
+                    </div>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+    {% else %}
+        <p class="caption">Every activity on this project is complete.</p>
+    {% endif %}
+</div>
+
+<div class="section-label">Blockers &amp; scope</div>
+<div class="field-row field-row-2">
+    <div class="panel">
+        <h3>Open blockers</h3>
+        {% if analysis.blockers %}
+            <table class="data-table">
+                <thead><tr><th>Type</th><th>Item</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for blocker in analysis.blockers %}
+                    <tr>
+                        <td>{{ blocker.kind }}</td>
+                        <td class="name-cell">{{ blocker.name }}</td>
+                        <td><span class="badge warning">{{ blocker.status }}</span></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p class="caption">No prerequisites or approvals are currently outstanding.</p>
+        {% endif %}
+    </div>
+
+    <div class="panel">
+        <h3>Equipment scope</h3>
+        {% if equipment_rows %}
+            <table class="data-table">
+                <thead><tr><th>Category</th><th class="num">Units</th></tr></thead>
+                <tbody>
+                {% for category, units in equipment_rows %}
+                    <tr><td class="name-cell">{{ category }}</td><td class="num">{{ units }}</td></tr>
+                {% endfor %}
+                <tr><td class="name-cell"><strong>Total</strong></td><td class="num"><strong>{{ analysis.equipment_units }}</strong></td></tr>
+                </tbody>
+            </table>
+        {% else %}
+            <p class="caption">No equipment logged for this project.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'portal/charts.js' %}"></script>
+<script src="{% static 'portal/insight.js' %}"></script>
+{% endblock %}

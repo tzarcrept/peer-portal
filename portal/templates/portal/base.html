@@ -1,0 +1,55 @@
+{% load static %}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}PEER — Project Execution and Evaluation Report{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'portal/style.css' %}">
+</head>
+<body>
+    <header class="app-header">
+        <span class="wordmark">PEER</span>
+        <h1>Project Execution and Evaluation Report</h1>
+        <p class="subtitle">Project controls dashboard &amp; operations portal</p>
+    </header>
+
+    <div class="app-body">
+        <nav class="sidebar">
+            <div class="nav-label">Analyse</div>
+            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+               href="{% url 'dashboard' %}">Portfolio dashboard</a>
+            <a class="nav-link {% if 'project_dashboard' in request.resolver_match.url_name %}active{% endif %}"
+               href="{% url 'project_dashboard' %}">Project analytics</a>
+
+            <div class="nav-divider"></div>
+
+            <div class="nav-label">Operate</div>
+            <a class="nav-link {% if request.resolver_match.url_name == 'repository' %}active{% endif %}"
+               href="{% url 'repository' %}">Project repository</a>
+            <a class="nav-link {% if request.resolver_match.url_name == 'add_project' or request.resolver_match.url_name == 'edit_project' %}active{% endif %}"
+               href="{% url 'add_project' %}">Add project log</a>
+
+            <div class="nav-divider"></div>
+
+            <div class="nav-label">Export</div>
+            <a class="nav-link" href="{% url 'download_analytics_csv' %}">Analytics CSV</a>
+            <a class="nav-link" href="{% url 'download_csv' %}">Full data CSV</a>
+        </nav>
+
+        <main class="content">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="app-message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+            {% block content %}{% endblock %}
+
+            <p class="synthetic-note">
+                Demonstration dataset. All projects, personnel, contractors, tag numbers and
+                figures shown are synthetic and do not represent any real organisation.
+            </p>
+        </main>
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

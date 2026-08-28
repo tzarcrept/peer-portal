@@ -1,0 +1,194 @@
+{% extends "portal/base.html" %}
+{% load static %}
+
+{% block content %}
+{% if editing %}
+    <h2>Editing Project: {{ original_name }}</h2>
+{% else %}
+    <h2>Create New Project</h2>
+{% endif %}
+
+<form method="post" id="project-form"
+      action="{% if editing %}{% url 'edit_project' original_name %}{% else %}{% url 'add_project' %}{% endif %}">
+    {% csrf_token %}
+
+    <!-- ==================== 1. Administrative Details ==================== -->
+    <h4>1. Administrative Details</h4>
+
+    <div class="field">
+        <label for="proj_name">Project Name:</label>
+        <input type="text" id="proj_name" name="proj_name" value="{{ initial.proj_name }}">
+    </div>
+
+    <div class="field-row field-row-3">
+        <div class="field">
+            <label for="reg_no">Registration No.:</label>
+            <input type="text" id="reg_no" name="reg_no" value="{{ initial.reg_no }}">
+        </div>
+        <div class="field">
+            <label for="reg_date">Registration Date:</label>
+            <input type="date" id="reg_date" name="reg_date" value="{{ initial.reg_date }}">
+        </div>
+        <div class="field">
+            <label for="ar_no">AR No.:</label>
+            <input type="text" id="ar_no" name="ar_no" value="{{ initial.ar_no }}">
+        </div>
+    </div>
+
+    <div class="field-row field-row-3">
+        <div class="field">
+            <label for="budget">Project Budget (INR):</label>
+            <input type="text" id="budget" name="budget" value="{{ initial.budget }}">
+        </div>
+        <div class="field">
+            <label for="actual_expenditure">Actual Expenditure (INR):</label>
+            <input type="text" id="actual_expenditure" name="actual_expenditure" value="{{ initial.actual_expenditure }}">
+        </div>
+        <div class="field">
+            <label for="contractor">Engineering Contractor:</label>
+            <input type="text" id="contractor" name="contractor" value="{{ initial.contractor }}">
+        </div>
+    </div>
+
+    <div class="field-row field-row-3">
+        <div class="field">
+            <label for="start_date">Project Start Date:</label>
+            <input type="date" id="start_date" name="start_date" value="{{ initial.start_date }}">
+        </div>
+        <div class="field">
+            <label for="comp_date">Expected Completion Date:</label>
+            <input type="date" id="comp_date" name="comp_date" value="{{ initial.comp_date }}">
+        </div>
+        <div class="field">
+            <label for="target_etc">Target / ETC:</label>
+            <input type="text" id="target_etc" name="target_etc" value="{{ initial.target_etc }}">
+        </div>
+    </div>
+
+    <div class="field-row field-row-3">
+        <div class="field">
+            <label for="area_unit">Area / Unit:</label>
+            <input type="text" id="area_unit" name="area_unit" value="{{ initial.area_unit }}">
+        </div>
+        <div class="field">
+            <label for="project_category">Project Category:</label>
+            <input type="text" id="project_category" name="project_category" list="category-options"
+                   value="{{ initial.project_category }}">
+            <datalist id="category-options">
+                {% for option in project_categories %}<option value="{{ option }}">{% endfor %}
+            </datalist>
+        </div>
+        <div class="field">
+            <label for="nature_of_project">Nature of Project:</label>
+            <input type="text" id="nature_of_project" name="nature_of_project" list="nature-options"
+                   value="{{ initial.nature_of_project }}">
+            <datalist id="nature-options">
+                {% for option in nature_choices %}<option value="{{ option }}">{% endfor %}
+            </datalist>
+        </div>
+    </div>
+
+    <div class="field-row field-row-2">
+        <div class="field">
+            <label for="projected_savings">Projected Savings:</label>
+            <input type="text" id="projected_savings" name="projected_savings" value="{{ initial.projected_savings }}">
+        </div>
+        <div class="field">
+            <label for="irr">IRR:</label>
+            <input type="text" id="irr" name="irr" value="{{ initial.irr }}">
+        </div>
+    </div>
+
+    <hr>
+
+    <!-- ==================== 2. Officials Involved ==================== -->
+    <h4>2. Officials Involved</h4>
+    <p class="caption">Optional — add every official associated with this project.</p>
+    <div id="officials-container"></div>
+    <button type="button" class="btn" id="add-official-btn">Add Official</button>
+
+    <hr>
+
+    <!-- ==================== 3. Project Prerequisites ==================== -->
+    <h4>3. Project Prerequisites</h4>
+    <p class="caption">Optional — leave blank if this project has no prerequisites to track.</p>
+    <div id="prereqs-container"></div>
+    <button type="button" class="btn" id="add-prereq-btn">Add Prerequisite</button>
+
+    <hr>
+
+    <!-- ==================== 4. Statutory Approvals ==================== -->
+    <h4>4. Statutory Approvals</h4>
+    <p class="caption">Fixed set of regulatory approval categories. Date is locked to N/A unless the approval is Available or Pending.</p>
+
+    <div class="approval-grid-header">
+        <div>Approval Type</div><div>Status</div><div>Date</div>
+    </div>
+    {% for row in approval_rows_list %}
+        <div class="approval-grid-row" data-approval-type="{{ row.type }}">
+            <div>{{ row.type }}</div>
+            <div>
+                <select class="approval-status-select" data-approval-type="{{ row.type }}">
+                    <option value="{{ placeholder }}" {% if row.status == placeholder %}selected{% endif %}>{{ placeholder }}</option>
+                    {% for s in approval_statuses %}
+                        <option value="{{ s }}" {% if row.status == s %}selected{% endif %}>{{ s }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <input type="date" class="approval-date-input" data-approval-type="{{ row.type }}"
+                       value="{{ row.date }}"
+                       {% if row.status != "Available" and row.status != "Pending" %}readonly{% endif %}>
+            </div>
+        </div>
+    {% endfor %}
+
+    <hr>
+
+    <!-- ==================== 5. Project Major Events ==================== -->
+    <h4>5. Project Major Events</h4>
+    <p class="caption">Optional — track key milestones such as scheme allotment, material requirement, or outage requests.</p>
+    <p class="caption">Duration = expected time for completion, calculated from Planned Start and Planned Finish.</p>
+    <div id="events-container"></div>
+    <button type="button" class="btn" id="add-event-btn">Add Event</button>
+
+    <hr>
+
+    <!-- ==================== 6. Equipment Specifications ==================== -->
+    <h4>6. Equipment Specifications</h4>
+    <p class="caption">Optional — leave blank if no equipment needs to be logged for this project.</p>
+    <div id="equipment-container"></div>
+    <button type="button" class="btn" id="add-equipment-btn">Add Equipment</button>
+
+    <hr>
+
+    <!-- ==================== Finalize Registry Action ==================== -->
+    <h4>Finalize Registry Action</h4>
+    <div class="action-row">
+        <button type="submit" class="btn btn-primary">Save Project</button>
+        <button type="button" class="btn btn-danger" id="delete-draft-btn">Delete Draft</button>
+    </div>
+
+    <!-- Hidden fields populated by JavaScript right before submit -->
+    <input type="hidden" name="equipment_json" id="equipment_json">
+    <input type="hidden" name="prereqs_json" id="prereqs_json">
+    <input type="hidden" name="officials_json" id="officials_json">
+    <input type="hidden" name="events_json" id="events_json">
+    <input type="hidden" name="approvals_json" id="approvals_json">
+</form>
+
+<!-- Initial state + option lists for JavaScript (rendered safely via json_script) -->
+{{ equipment_rows|json_script:"initial-equipment" }}
+{{ prereq_rows|json_script:"initial-prereqs" }}
+{{ official_rows|json_script:"initial-officials" }}
+{{ event_rows|json_script:"initial-events" }}
+{{ standard_categories|json_script:"opt-standard-categories" }}
+{{ prerequisite_types|json_script:"opt-prerequisite-types" }}
+{{ prerequisite_statuses|json_script:"opt-prerequisite-statuses" }}
+{{ event_statuses|json_script:"opt-event-statuses" }}
+{{ placeholder|json_script:"opt-placeholder" }}
+{% url 'add_project' as add_project_url %}
+{{ add_project_url|json_script:"add-project-url" }}
+
+<script src="{% static 'portal/form.js' %}"></script>
+{% endblock %}

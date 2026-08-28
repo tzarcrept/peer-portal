@@ -1,0 +1,148 @@
+{% extends "portal/base.html" %}
+{% load portal_extras %}
+
+{% block title %}Portfolio dashboard — PEER{% endblock %}
+
+{% block content %}
+<h2>Portfolio dashboard</h2>
+<p class="page-note">All projects · as at {{ portfolio.today }}</p>
+
+{% if not has_projects %}
+    <div class="empty-state">
+        <p>No projects yet.</p>
+        <p>Load the demonstration dataset with <code>python manage.py seed_synthetic_data</code>,
+           or add a project from “Add project log”.</p>
+    </div>
+{% else %}
+
+<div class="kpi-strip">
+    <div class="kpi is-planned">
+        <div class="kpi-label">Projects tracked</div>
+        <div class="kpi-value">{{ portfolio.project_count }}</div>
+        <div class="kpi-sub">{{ portfolio.total_blockers }} open blocker{{ portfolio.total_blockers|pluralize }}</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Average progress</div>
+        <div class="kpi-value">{{ portfolio.avg_actual }}%</div>
+        <div class="kpi-sub">against {{ portfolio.avg_planned }}% planned</div>
+    </div>
+    <div class="kpi {% if portfolio.avg_variance < -5 %}is-critical{% elif portfolio.avg_variance < 0 %}is-caution{% else %}is-good{% endif %}">
+        <div class="kpi-label">Schedule variance</div>
+        <div class="kpi-value {% if portfolio.avg_variance < -5 %}val-critical{% elif portfolio.avg_variance < 0 %}val-caution{% else %}val-good{% endif %}">{{ portfolio.avg_variance|signed }}</div>
+        <div class="kpi-sub">points, portfolio average</div>
+    </div>
+    <div class="kpi {% if portfolio.at_risk_count %}is-critical{% else %}is-good{% endif %}">
+        <div class="kpi-label">Needing attention</div>
+        <div class="kpi-value {% if portfolio.at_risk_count %}val-critical{% endif %}">{{ portfolio.at_risk_count }}</div>
+        <div class="kpi-sub">At Risk or Critical</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">Budget committed</div>
+        <div class="kpi-value">{{ portfolio.burn_pct|default:"—" }}%</div>
+        <div class="kpi-sub">{{ portfolio.total_spent|money }} of {{ portfolio.total_budget|money }}</div>
+    </div>
+</div>
+
+{% if insight %}
+    {% include "portal/_insight.html" with insight=insight heading="Portfolio insights" %}
+    <div class="action-row">
+        <button class="btn" id="refresh-insight" data-target="__portfolio__">Regenerate insights</button>
+        {% if not ai_configured %}
+            <span class="caption">Set <code>PEER_AI_API_KEY</code> to switch from rule-based to AI narrative.</span>
+        {% endif %}
+    </div>
+{% endif %}
+
+<div class="section-label">Portfolio progress</div>
+<div class="panel">
+    <div class="panel-head">
+        <h3>Blended S-curve</h3>
+        <span class="caption">Mean of every project’s target and current curves</span>
+    </div>
+    {% if portfolio_curve.has_data %}
+        <div class="chart-wrap" data-chart="s-curve" data-source="portfolio-curve-data"></div>
+        {{ portfolio_curve|json_script:"portfolio-curve-data" }}
+        <div class="legend">
+            <span><i class="swatch planned"></i> Target (planned)</span>
+            <span><i class="swatch actual"></i> Current (actual)</span>
+            <span><i class="swatch gap"></i> Shortfall</span>
+            <span><i class="swatch today"></i> Today</span>
+        </div>
+    {% else %}
+        <p class="caption">No scheduled activities available to plot.</p>
+    {% endif %}
+</div>
+
+<div class="section-label">Projects, worst variance first</div>
+<div class="panel">
+    <div class="table-scroll">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Project</th>
+                <th>Category</th>
+                <th class="num">Target</th>
+                <th class="num">Current</th>
+                <th>Variance</th>
+                <th>Health</th>
+                <th class="num">Blockers</th>
+                <th class="num">Late acts.</th>
+                <th class="num">Forecast slip</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in portfolio.rows %}
+            <tr>
+                <td class="name-cell"><a href="{% url 'project_dashboard_named' row.name %}">{{ row.name }}</a></td>
+                <td>{{ row.category }}</td>
+                <td class="num val-planned">{{ row.planned_pct }}%</td>
+                <td class="num">{{ row.actual_pct }}%</td>
+                <td>
+                    <div class="varbar" title="{{ row.variance }} points">
+                        <i class="{% if row.variance < 0 %}neg{% else %}pos{% endif %}"
+                           style="width: {{ row.variance|var_width }}px;"></i>
+                    </div>
+                    <span class="caption">{{ row.variance|signed }}</span>
+                </td>
+                <td><span class="badge {{ row.health.level }}">{{ row.health.label }}</span></td>
+                <td class="num">{{ row.blocker_count }}</td>
+                <td class="num">{{ row.critical_count }}</td>
+                <td class="num">
+                    {% if row.forecast and row.forecast.is_late %}
+                        <span class="val-critical">+{{ row.forecast.slip_days }}d</span>
+                    {% elif row.forecast %}on time{% else %}—{% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+
+<div class="section-label">By category</div>
+<div class="panel">
+    <table class="data-table">
+        <thead>
+            <tr><th>Category</th><th class="num">Projects</th><th class="num">Avg variance</th><th class="num">Budget</th></tr>
+        </thead>
+        <tbody>
+        {% for row in category_rows %}
+            <tr>
+                <td class="name-cell">{{ row.category }}</td>
+                <td class="num">{{ row.count }}</td>
+                <td class="num {% if row.avg_variance < -5 %}val-critical{% elif row.avg_variance < 0 %}val-caution{% else %}val-good{% endif %}">{{ row.avg_variance|signed }}</td>
+                <td class="num">{{ row.budget|money }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% load static %}
+<script src="{% static 'portal/charts.js' %}"></script>
+<script src="{% static 'portal/insight.js' %}"></script>
+{% endblock %}
