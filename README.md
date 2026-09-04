@@ -118,7 +118,7 @@ Click **Regenerate insights** on any analytics page to force a fresh AI narrativ
 python manage.py test
 ```
 
-44 tests covering the analytics maths, every AI failure mode (network down, timeout,
+42 tests covering the analytics maths, every AI failure mode (network down, timeout,
 malformed response, safety block), and every view including empty-database and
 unknown-project edge cases. A few tracebacks print during the run — those are tests
 deliberately simulating failures and asserting the fallback engages correctly. A clean
@@ -256,7 +256,7 @@ portal/
                             single source of truth
   views.py                   Dashboards, CRUD, CSV exports, insight-refresh endpoint
   reconstruct.py             Model querysets <-> form row shapes
-  tests.py                   44 tests: analytics maths, AI failure modes, all views
+  tests.py                   42 tests: analytics maths, AI failure modes, all views
   templatetags/               Presentation-only formatting filters
   management/commands/
     seed_synthetic_data.py   Synthetic dataset generator (see Data & privacy)
@@ -284,3 +284,6 @@ portal/
 
 ---
 
+## License
+
+[MIT](LICENSE) — use, fork, and adapt freely.
