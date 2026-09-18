@@ -1,0 +1,44 @@
+{% comment %}
+Shared AI insight panel. `insight` always has the same shape whether it came from
+the model or the rule-based fallback, so this template never needs to know which.
+The provenance label makes the difference visible to the reader rather than hiding it.
+{% endcomment %}
+<section class="insight {% if insight.source == 'rules' %}is-rules{% endif %}">
+    <div class="insight-head">
+        <h3>{{ heading|default:"Insights" }}</h3>
+        <div class="insight-meta">
+            {{ insight.source_label }}{% if insight.cached %} · cached{% endif %} · {{ insight.generated_at }}
+        </div>
+    </div>
+
+    <p class="insight-summary" data-insight-summary>{{ insight.summary }}</p>
+
+    <div class="insight-cols">
+        <div class="insight-col">
+            <h5>Risks</h5>
+            <ul class="insight-list risks" data-insight-risks>
+                {% for risk in insight.risks %}
+                    <li><strong>{{ risk.title }}</strong><span>{{ risk.detail }}</span></li>
+                {% empty %}
+                    <li><span>No risks flagged.</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+        <div class="insight-col">
+            <h5>Recommended actions</h5>
+            <ul class="insight-list actions" data-insight-actions>
+                {% for action in insight.actions %}
+                    <li><strong>{{ action.title }}</strong><span>{{ action.detail }}</span></li>
+                {% empty %}
+                    <li><span>No actions recommended.</span></li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <p class="insight-note" data-insight-note>
+        {% if insight.reason %}{{ insight.reason }} {% endif %}Every figure referenced above is
+        calculated in <code>portal/analytics.py</code>; the narrative layer interprets those
+        figures and does not compute them.
+    </p>
+</section>

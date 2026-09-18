@@ -1,0 +1,274 @@
+{% extends "portal/base.html" %}
+
+{% block title %}{{ selected_proj|default:"Repository" }} — PEER{% endblock %}
+
+{% block content %}
+<h2>Project repository</h2>
+<p class="page-note">Full logged detail for one project</p>
+
+{% if not project_names %}
+    <div class="empty-state">
+        <p>No projects logged yet.</p>
+        <p>Load the demonstration dataset with <code>python manage.py seed_synthetic_data</code>,
+           or create one from “Add project log”.</p>
+    </div>
+{% else %}
+    <form method="get" class="selector-bar" id="project-select-form">
+        <div class="field">
+            <label for="project-select">Project</label>
+            <select name="project" id="project-select"
+                    onchange="document.getElementById('project-select-form').submit()">
+                {% for name in project_names %}
+                    <option value="{{ name }}" {% if name == selected_proj %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+
+    {% if selected_proj %}
+        <div class="action-row">
+            <a class="btn btn-primary" href="{% url 'project_dashboard_named' selected_proj %}">View analytics</a>
+            <a class="btn" href="{% url 'edit_project' selected_proj %}">Edit project</a>
+            <a class="btn" href="{% url 'download_csv' %}">Download full data CSV</a>
+            <form method="post" action="{% url 'delete_project' selected_proj %}" class="inline-form"
+                  onsubmit="return confirm('Delete &quot;{{ selected_proj }}&quot; permanently? This cannot be undone.');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-danger">Delete project</button>
+            </form>
+        </div>
+
+        <div class="section-label">1 · Summary</div>
+        <div class="kpi-strip">
+            <div class="kpi is-planned">
+                <div class="kpi-label">Budget allocated</div>
+                <div class="kpi-value" style="font-size:1.2rem;">{{ meta.budget|default:"N/A" }}</div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Contractor</div>
+                <div class="kpi-value" style="font-size:0.95rem;">{{ meta.contractor|default:"N/A" }}</div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Start date</div>
+                <div class="kpi-value" style="font-size:1.05rem;">{{ meta.start_date|default:"N/A" }}</div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Completion date</div>
+                <div class="kpi-value" style="font-size:1.05rem;">{{ meta.completion_date|default:"N/A" }}</div>
+            </div>
+            <div class="kpi">
+                <div class="kpi-label">Equipment units</div>
+                <div class="kpi-value">{{ total_units }}</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <table class="data-table">
+                <thead><tr><th>Field</th><th>Value</th></tr></thead>
+                <tbody>
+                {% for label, value in additional_fields %}
+                    <tr><td class="name-cell">{{ label }}</td><td>{{ value }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="section-label">2 · Officials involved</div>
+        <div class="panel">
+        {% if not officials %}
+            <p class="caption">None recorded.</p>
+        {% else %}
+            <table class="data-table">
+                <thead><tr><th>Name</th><th>Designation</th><th>Department</th><th>Employee ID</th></tr></thead>
+                <tbody>
+                {% for o in officials %}
+                    <tr>
+                        <td class="name-cell">{{ o.name|default:"N/A" }}</td>
+                        <td>{{ o.designation|default:"—" }}</td>
+                        <td>{{ o.department|default:"—" }}</td>
+                        <td class="num">{{ o.employee_id|default:"—" }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        </div>
+
+        <div class="section-label">3 · Prerequisites</div>
+        <div class="panel">
+        {% if not prerequisites %}
+            <p class="caption">None recorded.</p>
+        {% else %}
+            <table class="data-table">
+                <thead><tr><th>Prerequisite</th><th>Status</th><th>Remarks</th></tr></thead>
+                <tbody>
+                {% for p in prerequisites %}
+                    <tr>
+                        <td class="name-cell">{{ p.type|default:"N/A" }}</td>
+                        <td>
+                            <span class="badge {% if p.status == 'Available' or p.status == 'Yes' %}good{% elif p.status == 'Pending' or p.status == 'In Progress' %}caution{% elif p.status == 'Not Available' or p.status == 'No' %}critical{% else %}unknown{% endif %}">{{ p.status|default:"N/A" }}</span>
+                        </td>
+                        <td>{{ p.remarks|default:"—" }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        </div>
+
+        <div class="section-label">4 · Regulatory approvals</div>
+        <div class="panel">
+        {% if not approvals %}
+            <p class="caption">None recorded.</p>
+        {% else %}
+            <table class="data-table">
+                <thead><tr><th>Approval</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody>
+                {% for a_type, details in approvals.items %}
+                    <tr>
+                        <td class="name-cell">{{ a_type }}</td>
+                        <td>
+                            <span class="badge {% if details.status == 'Available' %}good{% elif details.status == 'Pending' %}caution{% elif details.status == 'Not Available' %}critical{% else %}unknown{% endif %}">{{ details.status|default:"N/A" }}</span>
+                        </td>
+                        <td class="num">{{ details.date|default:"N/A" }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+        </div>
+
+        <div class="section-label">5 · Major activities</div>
+        <div class="panel">
+        {% if not events %}
+            <p class="caption">None recorded.</p>
+        {% else %}
+            <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Activity</th><th>Planned start</th><th class="num">Days</th><th>Planned finish</th>
+                        <th class="num">Crit.</th><th>Actual start</th><th>Actual finish</th>
+                        <th class="num">Done</th><th>Status</th><th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for e in events %}
+                    <tr>
+                        <td class="name-cell">{{ e.event_name|default:"N/A" }}</td>
+                        <td class="num">{{ e.planned_start|default:"—" }}</td>
+                        <td class="num">{{ e.duration|default:"—" }}</td>
+                        <td class="num">{{ e.planned_finish|default:"—" }}</td>
+                        <td class="num">{{ e.criticality_rating }}/5</td>
+                        <td class="num">{{ e.actual_start|default:"—" }}</td>
+                        <td class="num">{{ e.actual_finish|default:"—" }}</td>
+                        <td class="num">{{ e.progress_pct }}%</td>
+                        <td>
+                            <span class="badge {% if e.status == 'Completed' %}good{% elif e.status == 'In Progress' %}neutral{% elif e.status == 'Delayed' %}critical{% else %}unknown{% endif %}">{{ e.status|default:"N/A" }}</span>
+                        </td>
+                        <td>{{ e.remarks|default:"—" }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        {% endif %}
+        </div>
+
+        <div class="section-label">6 · Equipment specifications</div>
+        <div class="panel">
+        {% if not has_equipment %}
+            <p class="caption">None recorded.</p>
+        {% else %}
+            <div class="field-row field-row-2">
+                <div class="field">
+                    <label for="equipment-category-select">Category</label>
+                    <select id="equipment-category-select"></select>
+                </div>
+                <div class="field">
+                    <label for="equipment-tag-select">Tag number / name</label>
+                    <select id="equipment-tag-select"></select>
+                </div>
+            </div>
+
+            <div id="equipment-detail"></div>
+
+            {{ equipment_category_groups|json_script:"equipment-data" }}
+            <script>
+            (function () {
+                const equipmentData = JSON.parse(document.getElementById("equipment-data").textContent);
+                const categorySelect = document.getElementById("equipment-category-select");
+                const tagSelect = document.getElementById("equipment-tag-select");
+                const detailBox = document.getElementById("equipment-detail");
+
+                Object.keys(equipmentData).forEach(function (category) {
+                    const opt = document.createElement("option");
+                    opt.value = category;
+                    opt.textContent = category;
+                    categorySelect.appendChild(opt);
+                });
+
+                function populateTags() {
+                    tagSelect.innerHTML = "";
+                    const items = equipmentData[categorySelect.value] || [];
+                    items.forEach(function (item) {
+                        const opt = document.createElement("option");
+                        opt.value = item.tag;
+                        opt.textContent = item.tag;
+                        tagSelect.appendChild(opt);
+                    });
+                    showDetail();
+                }
+
+                function showDetail() {
+                    detailBox.innerHTML = "";
+                    const items = equipmentData[categorySelect.value] || [];
+                    const selected = items.find(function (item) { return item.tag === tagSelect.value; });
+                    if (!selected) return;
+
+                    const table = document.createElement("table");
+                    table.className = "data-table";
+                    const thead = document.createElement("thead");
+                    const headRow = document.createElement("tr");
+                    ["Property", "Value"].forEach(function (text) {
+                        const th = document.createElement("th");
+                        th.textContent = text;
+                        headRow.appendChild(th);
+                    });
+                    thead.appendChild(headRow);
+                    table.appendChild(thead);
+
+                    const tbody = document.createElement("tbody");
+                    function addRow(key, value) {
+                        const tr = document.createElement("tr");
+                        const tdKey = document.createElement("td");
+                        tdKey.className = "name-cell";
+                        tdKey.textContent = key;
+                        const tdVal = document.createElement("td");
+                        tdVal.textContent = value;
+                        tr.appendChild(tdKey);
+                        tr.appendChild(tdVal);
+                        tbody.appendChild(tr);
+                    }
+
+                    addRow("Tag number / name", selected.tag);
+                    addRow("Category", selected.specs.Category || "N/A");
+                    addRow("Quantity", selected.specs.Count != null ? selected.specs.Count : 1);
+                    Object.keys(selected.specs)
+                        .filter(function (k) { return k !== "Category" && k !== "Count"; })
+                        .forEach(function (key) { addRow(key, selected.specs[key]); });
+
+                    table.appendChild(tbody);
+                    detailBox.appendChild(table);
+                }
+
+                categorySelect.addEventListener("change", populateTags);
+                tagSelect.addEventListener("change", showDetail);
+
+                populateTags();
+            })();
+            </script>
+        {% endif %}
+        </div>
+    {% endif %}
+{% endif %}
+{% endblock %}
